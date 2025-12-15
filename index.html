@@ -295,8 +295,8 @@ async function assignBus(){
 
   const current = getSpotData(selectedSpotId);
   if (current && current.status && current.status !== "FIT"){
-    alert("❌ This spot is NO FIT.
-Mark as FIT (after repair) or CLEAR first.");
+    alert("❌ This spot is NO FIT. Mark as FIT (after repair) or CLEAR first.");
+
     return;
   }
 
