@@ -1,70 +1,91 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NP BUS – NP REALTIME YARD LAYOUT</title>
+<meta charset="UTF-8" />
+<title>NP BUS – NP Realtime Yard Layout</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:Arial,Helvetica,sans-serif;background:#0A1628;color:#fff;overflow:hidden}
-
-.layout{display:grid;grid-template-columns:320px 1fr;height:100vh}
-
-.sidebar{
-background:#1E293B;
-padding:16px;
-overflow-y:auto;
+body{
+  margin:0;
+  font-family:Arial,Helvetica,sans-serif;
+  background:#0b1a2a;
+  color:#fff;
 }
-
-.main{position:relative}
-
-.title{font-size:22px;font-weight:bold;color:#00D4FF}
-.subtitle{font-size:12px;color:#94A3B8;margin-bottom:16px}
-
-input,button{
-width:100%;
-padding:10px;
-margin-top:8px;
-border-radius:6px;
-border:none;
+#sidebar{
+  position:fixed;
+  left:0;
+  top:0;
+  bottom:0;
+  width:300px;
+  background:#0f243a;
+  padding:15px;
+  overflow:auto;
 }
-
-button{font-weight:bold;cursor:pointer}
-
-.btn{background:#00D4FF;color:#0A1628}
-.btn-danger{background:#EF4444;color:white}
-.btn-ok{background:#22C55E;color:#0A1628}
-
-canvas{display:block;margin:auto}
-
 #menuBtn{
-position:fixed;
-top:12px;
-left:12px;
-z-index:2000;
-width:44px;
-height:44px;
-border-radius:8px;
-border:none;
-background:#00D4FF;
-color:#0A1628;
-font-size:22px;
-font-weight:bold;
+  display:none;
+}
+h2{margin-top:0;color:#4fd1ff;}
+input,button{
+  width:100%;
+  padding:10px;
+  margin:6px 0;
+  border:none;
+  border-radius:6px;
+  font-size:15px;
+}
+button{cursor:pointer}
+.search{background:#19c8ff;color:#000;font-weight:bold;}
+.assign{background:#1bbcff;}
+.fit{background:#2ecc71;}
+.clear{background:#e74c3c;}
+
+#mapWrap{
+  margin-left:300px;
+  padding:10px;
+}
+#map{
+  position:relative;
+}
+.spot{
+  position:absolute;
+  border:2px solid #00cfff;
+  background:rgba(0,200,255,0.15);
+  color:#fff;
+  font-size:12px;
+  text-align:center;
+  cursor:pointer;
+}
+.spot.selected{
+  outline:3px solid yellow;
+}
+.spot.fit{
+  background:rgba(46,204,113,0.6);
+}
+.spot.nofit{
+  background:rgba(231,76,60,0.7);
+}
+.spot.highlight{
+  outline:4px solid #000;
+  z-index:999;
 }
 
 @media(max-width:768px){
-.layout{grid-template-columns:1fr}
-.sidebar{
-display:none;
-position:absolute;
-left:0;
-top:0;
-width:85%;
-height:100%;
-z-index:1500;
-}
-.sidebar.open{display:block}
+  #sidebar{left:-300px}
+  #sidebar.open{left:0}
+  #menuBtn{
+    display:block;
+    position:fixed;
+    top:10px;
+    left:10px;
+    z-index:2000;
+    background:#19c8ff;
+    color:#000;
+    padding:10px;
+    border-radius:6px;
+    font-weight:bold;
+  }
+  #mapWrap{margin-left:0}
 }
 </style>
 </head>
@@ -73,295 +94,141 @@ z-index:1500;
 
 <button id="menuBtn">☰</button>
 
-<div class="layout">
-<div class="sidebar" id="sidebar">
-  <div class="title">NP BUS</div>
-  <div class="subtitle">NP REALTIME YARD LAYOUT</div>
+<div id="sidebar">
+  <h2>NP BUS</h2>
 
-  <label>Search Fleet / Bonnet</label>
   <input id="searchInput" placeholder="e.g. ws50">
-  <button class="btn" onclick="searchBus()">Search</button>
+  <button class="search" onclick="searchBus()">Search</button>
 
-    <div style="margin-top:20px">
-    <button class="btn" onclick="assignBus()">ASSIGN BUS</button>
-    <button class="btn-ok" onclick="markFit()">MARK AS FIT</button>
-    <button class="btn-danger" onclick="clearSpot()">CLEAR SPOT</button>
+  <button class="assign" onclick="assignBus()">ASSIGN BUS</button>
+  <button class="fit" onclick="markFit()">MARK AS FIT</button>
+  <button class="clear" onclick="clearSpot()">CLEAR SPOT</button>
+</div>
+
+<div id="mapWrap">
+  <div id="map">
+    <img src="depot-map_1_.jpg" style="width:100%;display:block;">
   </div>
 </div>
 
-<div class="main">
-  <canvas id="canvas"></canvas>
-</div>
-</div>
-
 <script>
+const DATABASE_URL = "parking-progress-1765754484135.json";
 
-const DATABASE_URL = "https://np-run-out-default-rtdb.firebaseio.com/megias/np-run-out/spots.json";
-const COORDS_URL = "parking-progress-1765754484135.json";
-const MAP_URL = "depot-map_1_.jpg";
+let spotsData = {};
+let selectedSpotId = null;
 
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
-const img = new Image();
-img.src = MAP_URL;
-
-let spotsConfig = [];   // layout coordinates (array)
-let spotsData = {};     // realtime data from Firebase { spotId: {fleetNumber, status} }
-
-let selectedSpotId = null;   // user-selected parking
-let highlightedSpotId = null; // from search
-let highlightUntil = 0;
-
-// --- Load layout coordinates (supports multiple JSON formats) ---
-function normalizeCoords(raw){
-  // 1) Array already
-  if (Array.isArray(raw)) return raw;
-
-  // 2) {spots: [...]}
-  if (raw && Array.isArray(raw.spots)) return raw.spots;
-
-  // 3) {spots: {"0..99":{...}, "100..199":{...}}} or other grouped objects
-  if (raw && raw.spots && typeof raw.spots === "object"){
-    const groups = Object.values(raw.spots);
-    const flat = [];
-    for (const g of groups){
-      if (!g) continue;
-      if (Array.isArray(g)) flat.push(...g);
-      else if (typeof g === "object") flat.push(...Object.values(g));
-    }
-    return flat;
-  }
-
-  return [];
-}
-
-fetch(COORDS_URL)
-  .then(r => r.json())
-  .then(d => { spotsConfig = normalizeCoords(d); draw(); })
-  .catch(() => { spotsConfig = []; draw(); });
-
-// --- Canvas sizing ---
-img.onload = () => {
-  canvas.width = img.width;
-  canvas.height = img.height;
-  draw();
-};
-
-// --- Realtime refresh (slower to avoid Netlify limits) ---
+// ---- LOAD DATA ----
 async function refresh(){
-  try{
-    const r = await fetch(DATABASE_URL, { cache: "no-store" });
-    spotsData = await r.json() || {};
-    draw();
-  }catch(e){
-    // keep last state
-  }
+  const r = await fetch(DATABASE_URL);
+  spotsData = await r.json() || {};
+  draw();
 }
 
-// refresh when visible; pause when tab hidden to reduce usage
-let refreshTimer = null;
-function startRefresh(){
-  if (refreshTimer) return;
-  refresh();
-  refreshTimer = setInterval(refresh, 6000);
-}
-function stopRefresh(){
-  if (!refreshTimer) return;
-  clearInterval(refreshTimer);
-  refreshTimer = null;
-}
-document.addEventListener("visibilitychange", () => {
-  if (document.hidden) stopRefresh();
-  else startRefresh();
-});
-startRefresh();
+// ---- DRAW SPOTS ----
+async function draw(){
+  const map = document.getElementById("map");
+  document.querySelectorAll(".spot").forEach(e=>e.remove());
 
-// --- Helpers ---
-function getSpotData(id){
-  // Firebase keys may be "31" or 31; handle both
-  return spotsData[id] ?? spotsData[String(id)] ?? spotsData[Number(id)] ?? null;
-}
+  const coords = await fetch("EDITOR-230-SPOTS(1).html")
+    .then(r=>r.text());
 
-function setSelected(id){
-  selectedSpotId = id == null ? null : String(id);
-}
+  const match = coords.match(/\[(.|\n)*\]/);
+  if(!match) return;
 
-function draw(){
-  if (!canvas.width || !canvas.height){
-    // image not loaded yet
-    return;
-  }
+  const spots = JSON.parse(match[0]);
 
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  ctx.drawImage(img,0,0);
+  spots.forEach(s=>{
+    const d = document.createElement("div");
+    d.className="spot";
+    d.style.left=s.x+"px";
+    d.style.top=s.y+"px";
+    d.style.width=s.w+"px";
+    d.style.height=s.h+"px";
+    d.style.transform=`rotate(${s.rotation}deg)`;
+    d.innerText=s.id;
 
-  const now = Date.now();
-
-  spotsConfig.forEach(cfg => {
-    const id = String(cfg.id);
-    const spot = getSpotData(id);
-
-    const isHighlighted = (id === String(highlightedSpotId)) && now < highlightUntil;
-    const isSelected = (id === String(selectedSpotId));
-
-    ctx.save();
-    ctx.translate(cfg.x + cfg.w/2, cfg.y + cfg.h/2);
-    ctx.rotate((cfg.rotation || 0) * Math.PI/180);
-    ctx.translate(-(cfg.x + cfg.w/2), -(cfg.y + cfg.h/2));
-
-    // Fill
-    if (isHighlighted){
-      ctx.fillStyle = "rgba(0,0,0,0.7)";
-      ctx.strokeStyle = "#FFD700";
-      ctx.lineWidth = 5;
-    } else if (spot){
-      ctx.fillStyle = (spot.status === "FIT") ? "rgba(34,197,94,.5)" : "rgba(239,68,68,.5)";
-      ctx.strokeStyle = "#00D4FF";
-      ctx.lineWidth = 2;
-    } else {
-      ctx.fillStyle = "rgba(0,212,255,.25)";
-      ctx.strokeStyle = "#00D4FF";
-      ctx.lineWidth = 2;
+    const data = spotsData[s.id];
+    if(data){
+      if(data.status==="NO FIT") d.classList.add("nofit");
+      else d.classList.add("fit");
     }
 
-    ctx.fillRect(cfg.x, cfg.y, cfg.w, cfg.h);
-    ctx.strokeRect(cfg.x, cfg.y, cfg.w, cfg.h);
-
-    // Selected overlay border (very visible)
-    if (isSelected && !isHighlighted){
-      ctx.strokeStyle = "#000";
-      ctx.lineWidth = 4;
-      ctx.strokeRect(cfg.x - 2, cfg.y - 2, cfg.w + 4, cfg.h + 4);
-    }
-
-    // Labels
-    ctx.fillStyle = "#fff";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-
-    ctx.font = "bold 16px Arial";
-    ctx.fillText(id, cfg.x + cfg.w/2, cfg.y + cfg.h/2);
-
-    if (spot && spot.fleetNumber){
-      ctx.font = "bold 14px Arial";
-      ctx.fillText(String(spot.fleetNumber), cfg.x + cfg.w/2, cfg.y + cfg.h/2 + 14);
-    }
-
-    ctx.restore();
+    d.onclick=()=>{
+      document.querySelectorAll(".spot").forEach(x=>x.classList.remove("selected"));
+      d.classList.add("selected");
+      selectedSpotId=s.id;
+    };
+    map.appendChild(d);
   });
 }
 
-// --- Click to select parking ---
-canvas.addEventListener("click", (e) => {
-  const rect = canvas.getBoundingClientRect();
-  const scaleX = canvas.width / rect.width;
-  const scaleY = canvas.height / rect.height;
-  const x = (e.clientX - rect.left) * scaleX;
-  const y = (e.clientY - rect.top) * scaleY;
+// ---- HELPERS ----
+function getSpotData(id){
+  return spotsData[id] || null;
+}
 
-  let found = null;
-  for (const cfg of spotsConfig){
-    if (x >= cfg.x && x <= cfg.x + cfg.w && y >= cfg.y && y <= cfg.y + cfg.h){
-      found = String(cfg.id);
-      break;
-    }
-  }
-  setSelected(found);
-  draw();
-});
-
-// --- Search & highlight ---
+// ---- SEARCH ----
 function searchBus(){
-  const val = document.getElementById("searchInput").value.trim().toLowerCase();
-  if(!val) return;
+  const q=document.getElementById("searchInput").value.trim().toLowerCase();
+  if(!q) return;
 
-  for (const id in spotsData){
-    const spot = spotsData[id];
-    if(!spot || !spot.fleetNumber) continue;
-    if (String(spot.fleetNumber).trim().toLowerCase() === val){
-      highlightedSpotId = String(id);
-      highlightUntil = Date.now() + 3500;
-      setSelected(id); // helpful: actions apply immediately
-      draw();
+  document.querySelectorAll(".spot").forEach(s=>s.classList.remove("highlight"));
+
+  for(const id in spotsData){
+    if(spotsData[id].fleetNumber===q){
+      const el=[...document.querySelectorAll(".spot")].find(x=>x.innerText===id);
+      if(el){
+        el.classList.add("highlight");
+        el.scrollIntoView({behavior:"smooth",block:"center"});
+        selectedSpotId=id;
+      }
       return;
     }
   }
   alert("Bus not found");
 }
 
-// --- Assign bus to selected spot ---
+// ---- ASSIGN ----
 async function assignBus(){
-  if(!selectedSpotId) return alert("Select a parking first (click on the map).");
+  if(!selectedSpotId) return alert("Select a parking first");
 
-  const current = getSpotData(selectedSpotId);
-  if (current && current.status && current.status !== "FIT"){
-    alert("❌ This spot is NO FIT. Mark as FIT (after repair) or CLEAR first.");
-
+  const current=getSpotData(selectedSpotId);
+  if(current && current.status==="NO FIT"){
+    alert("❌ NO FIT. Mark as FIT or CLEAR first.");
     return;
   }
 
-  const bus = prompt(`Assign bus to parking ${selectedSpotId} (fleet/bonnet):`);
+  const bus=prompt("Fleet / Bonnet:");
   if(!bus) return;
 
-  const payload = {
-    fleetNumber: String(bus).trim().toLowerCase(),
-    status: (current && current.status) ? current.status : "FIT"
-  };
-
-  await fetch(
-    DATABASE_URL.replace(".json", `/${selectedSpotId}.json`),
-    {
-      method: "PATCH",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify(payload)
-    }
-  );
-
-  // quick refresh
-  refresh();
+  spotsData[selectedSpotId]={fleetNumber:bus.toLowerCase(),status:"FIT"};
+  save();
 }
 
-// --- Mark selected spot as FIT ---
-async function markFit(){
-  if(!selectedSpotId) return alert("Select a parking first (click on the map) or search a bus.");
-  const current = getSpotData(selectedSpotId);
-  if (current && current.status === "FIT"){
-    alert("Already FIT");
-    return;
-  }
-
-  await fetch(
-    DATABASE_URL.replace(".json", `/${selectedSpotId}.json`),
-    {
-      method: "PATCH",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({ status: "FIT" })
-    }
-  );
-  refresh();
+// ---- FIT / CLEAR ----
+function markFit(){
+  if(!selectedSpotId) return alert("Select a parking");
+  const d=spotsData[selectedSpotId]||{};
+  d.status="FIT";
+  spotsData[selectedSpotId]=d;
+  save();
+}
+function clearSpot(){
+  if(!selectedSpotId) return alert("Select a parking");
+  delete spotsData[selectedSpotId];
+  save();
 }
 
-// --- Clear selected spot (remove fleet assignment but keep status FIT) ---
-async function clearSpot(){
-  if(!selectedSpotId) return alert("Select a parking first (click on the map) or search a bus.");
-
-  // Make it empty and safe by default
-  await fetch(
-    DATABASE_URL.replace(".json", `/${selectedSpotId}.json`),
-    {
-      method: "PATCH",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({ fleetNumber: null, status: "FIT" })
-    }
-  );
-  refresh();
+function save(){
+  localStorage.setItem("np-spots",JSON.stringify(spotsData));
+  draw();
 }
 
-// --- Mobile menu ---
-document.getElementById("menuBtn").onclick = () => {
+document.getElementById("menuBtn").onclick=()=>{
   document.getElementById("sidebar").classList.toggle("open");
 };
 
+refresh();
 </script>
 
 </body>
