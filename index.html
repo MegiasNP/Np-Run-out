@@ -124,7 +124,11 @@ function draw(){
     d.style.width = (s.w * sx) + "px";
     d.style.height = (s.h * sy) + "px";
     d.style.transform = `rotate(${s.rotation || 0}deg)`;
-    d.textContent = s.id;
+    d.innerHTML = `
+  <div style="font-size:12px">${s.id}</div>
+  ${st?.fleetNumber ? `<div style="font-size:14px;font-weight:bold">${st.fleetNumber.toUpperCase()}</div>` : ""}
+`;
+
 
     d.onclick = ()=>{
       selected = s.id;
