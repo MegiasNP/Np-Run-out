@@ -132,10 +132,24 @@ function draw(){
 
 
     d.onclick = ()=>{
-      selected = s.id;
-      document.getElementById("sel").textContent = s.id;
-      draw();
-    };
+  selected = s.id;
+  document.getElementById("sel").textContent = s.id;
+
+  // si no hay bus asignado, pedir bonnet al hacer click
+  if(!data[s.id]?.fleetNumber){
+    const fleet = prompt(`Assign bonnet number to parking ${s.id}:`);
+    if(fleet){
+      save(s.id,{
+        fleetNumber: fleet.trim().toLowerCase(),
+        status: data[s.id]?.status || "FIT"
+      });
+      return;
+    }
+  }
+
+  draw();
+};
+
 
     wrap.appendChild(d);
   });
