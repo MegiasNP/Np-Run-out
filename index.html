@@ -2,90 +2,42 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>NP BUS – NP Realtime Yard Layout</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
 <style>
-body{
-  margin:0;
-  font-family:Arial,Helvetica,sans-serif;
-  background:#0b1a2a;
-  color:#fff;
-}
-#sidebar{
-  position:fixed;
-  left:0;
-  top:0;
-  bottom:0;
-  width:300px;
-  background:#0f243a;
-  padding:15px;
-  overflow:auto;
-}
-#menuBtn{
-  display:none;
-}
-h2{margin-top:0;color:#4fd1ff;}
-input,button{
-  width:100%;
-  padding:10px;
-  margin:6px 0;
-  border:none;
-  border-radius:6px;
-  font-size:15px;
-}
-button{cursor:pointer}
-.search{background:#19c8ff;color:#000;font-weight:bold;}
-.assign{background:#1bbcff;}
-.fit{background:#2ecc71;}
-.clear{background:#e74c3c;}
+body{margin:0;font-family:Arial;background:#0A1628;color:#fff}
+#menuBtn{display:none;position:fixed;top:10px;left:10px;z-index:1000;
+background:#00D4FF;color:#022;border:none;border-radius:8px;padding:10px;font-size:20px}
+.app{display:grid;grid-template-columns:320px 1fr;height:100vh}
+.sidebar{background:#13233a;padding:14px;overflow:auto}
+.main{position:relative}
+.card{background:#0f1d31;padding:12px;border-radius:10px;margin-bottom:12px}
+input,button{width:100%;padding:10px;margin-top:8px;border-radius:8px;border:none}
+button{font-weight:bold;cursor:pointer}
+.assign{background:#00D4FF;color:#022}
+.fit{background:#22c55e;color:#022}
+.unfit{background:#ef4444;color:#fff}
+.clear{background:#f97316;color:#022}
 
-#mapWrap{
-  margin-left:300px;
-  padding:10px;
-}
-#map{
-  position:relative;
-}
+.mapWrap{position:relative}
+#map{width:100%;display:block}
 .spot{
-  position:absolute;
-  border:2px solid #00cfff;
-  background:rgba(0,200,255,0.15);
-  color:#fff;
-  font-size:12px;
-  text-align:center;
-  cursor:pointer;
+position:absolute;border:2px solid #00D4FF;
+background:rgba(0,212,255,.25);color:#fff;
+font-size:12px;font-weight:bold;text-align:center;
+cursor:pointer;user-select:none
 }
-.spot.selected{
-  outline:3px solid yellow;
-}
-.spot.fit{
-  background:rgba(46,204,113,0.6);
-}
-.spot.nofit{
-  background:rgba(231,76,60,0.7);
-}
-.spot.highlight{
-  outline:4px solid #000;
-  z-index:999;
-}
+.spot.fit{background:rgba(34,197,94,.6)}
+.spot.nofit{background:rgba(239,68,68,.7)}
+.spot.selected{outline:3px solid #fff}
+.spot.highlight{outline:4px solid #000;z-index:20}
 
 @media(max-width:768px){
-  #sidebar{left:-300px}
-  #sidebar.open{left:0}
-  #menuBtn{
-    display:block;
-    position:fixed;
-    top:10px;
-    left:10px;
-    z-index:2000;
-    background:#19c8ff;
-    color:#000;
-    padding:10px;
-    border-radius:6px;
-    font-weight:bold;
-  }
-  #mapWrap{margin-left:0}
+.app{grid-template-columns:1fr}
+.sidebar{position:fixed;left:-320px;top:0;bottom:0;width:320px;z-index:999}
+.sidebar.open{left:0}
+#menuBtn{display:block}
 }
 </style>
 </head>
@@ -94,141 +46,119 @@ button{cursor:pointer}
 
 <button id="menuBtn">☰</button>
 
-<div id="sidebar">
+<div class="app">
+<div class="sidebar" id="sidebar">
   <h2>NP BUS</h2>
 
-  <input id="searchInput" placeholder="e.g. ws50">
-  <button class="search" onclick="searchBus()">Search</button>
+  <div class="card">
+    <input id="searchInput" placeholder="Search fleet / bonnet">
+    <button onclick="searchBus()">SEARCH</button>
+  </div>
 
-  <button class="assign" onclick="assignBus()">ASSIGN BUS</button>
-  <button class="fit" onclick="markFit()">MARK AS FIT</button>
-  <button class="clear" onclick="clearSpot()">CLEAR SPOT</button>
-</div>
+  <div class="card">
+    <button class="assign" onclick="assignBus()">ASSIGN BUS</button>
+    <button class="unfit" onclick="markUnfit()">MARK NO FIT</button>
+    <button class="fit" onclick="markFit()">MARK FIT</button>
+    <button class="clear" onclick="clearSpot()">CLEAR</button>
+  </div>
 
-<div id="mapWrap">
-  <div id="map">
-    <img src="depot-map_1_.jpg" style="width:100%;display:block;">
+  <div class="card">
+    Selected: <b id="sel">—</b>
   </div>
 </div>
 
+<div class="main">
+  <div class="mapWrap">
+    <img id="map" src="depot-map_1_.jpg">
+  </div>
+</div>
+</div>
+
 <script>
-const DATABASE_URL = "parking-progress-1765754484135.json";
+const FIREBASE="https://np-run-out-default-rtdb.firebaseio.com";
+const LAYOUT="spots-layout.json";
 
-let spotsData = {};
-let selectedSpotId = null;
+let layout=[],data={},selected=null,highlight=null,hlUntil=0;
 
-// ---- LOAD DATA ----
+const map=document.getElementById("map");
+const wrap=document.querySelector(".mapWrap");
+
+async function loadLayout(){
+  layout=await fetch(LAYOUT).then(r=>r.json());
+}
 async function refresh(){
-  const r = await fetch(DATABASE_URL);
-  spotsData = await r.json() || {};
+  data=await fetch(FIREBASE+"/spots.json").then(r=>r.json())||{};
   draw();
 }
-
-// ---- DRAW SPOTS ----
-async function draw(){
-  const map = document.getElementById("map");
+function draw(){
   document.querySelectorAll(".spot").forEach(e=>e.remove());
+  const sx=map.clientWidth/map.naturalWidth;
+  const sy=map.clientHeight/map.naturalHeight;
+  const now=Date.now();
 
-  const coords = await fetch("EDITOR-230-SPOTS(1).html")
-    .then(r=>r.text());
-
-  const match = coords.match(/\[(.|\n)*\]/);
-  if(!match) return;
-
-  const spots = JSON.parse(match[0]);
-
-  spots.forEach(s=>{
-    const d = document.createElement("div");
+  layout.forEach(s=>{
+    const d=document.createElement("div");
     d.className="spot";
-    d.style.left=s.x+"px";
-    d.style.top=s.y+"px";
-    d.style.width=s.w+"px";
-    d.style.height=s.h+"px";
-    d.style.transform=`rotate(${s.rotation}deg)`;
-    d.innerText=s.id;
+    const st=data[s.id];
+    if(st?.status==="NO FIT") d.classList.add("nofit");
+    else if(st?.status==="FIT") d.classList.add("fit");
+    if(s.id===selected) d.classList.add("selected");
+    if(s.id===highlight && now<hlUntil) d.classList.add("highlight");
 
-    const data = spotsData[s.id];
-    if(data){
-      if(data.status==="NO FIT") d.classList.add("nofit");
-      else d.classList.add("fit");
-    }
+    d.style.left=s.x*sx+"px";
+    d.style.top=s.y*sy+"px";
+    d.style.width=s.w*sx+"px";
+    d.style.height=s.h*sy+"px";
+    d.style.transform=`rotate(${s.rotation||0}deg)`;
+    d.textContent=s.id;
 
-    d.onclick=()=>{
-      document.querySelectorAll(".spot").forEach(x=>x.classList.remove("selected"));
-      d.classList.add("selected");
-      selectedSpotId=s.id;
-    };
-    map.appendChild(d);
+    d.onclick=()=>{selected=s.id;document.getElementById("sel").textContent=s.id;draw()};
+    wrap.appendChild(d);
   });
 }
 
-// ---- HELPERS ----
-function getSpotData(id){
-  return spotsData[id] || null;
+async function save(id,payload){
+  await fetch(`${FIREBASE}/spots/${id}.json`,{
+    method:"PATCH",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(payload)
+  });
+  refresh();
 }
 
-// ---- SEARCH ----
 function searchBus(){
-  const q=document.getElementById("searchInput").value.trim().toLowerCase();
-  if(!q) return;
-
-  document.querySelectorAll(".spot").forEach(s=>s.classList.remove("highlight"));
-
-  for(const id in spotsData){
-    if(spotsData[id].fleetNumber===q){
-      const el=[...document.querySelectorAll(".spot")].find(x=>x.innerText===id);
-      if(el){
-        el.classList.add("highlight");
-        el.scrollIntoView({behavior:"smooth",block:"center"});
-        selectedSpotId=id;
-      }
-      return;
+  const q=document.getElementById("searchInput").value.toLowerCase();
+  for(const id in data){
+    if(data[id].fleetNumber===q){
+      highlight=id;hlUntil=Date.now()+4000;selected=id;
+      document.getElementById("sel").textContent=id;
+      draw();return;
     }
   }
   alert("Bus not found");
 }
 
-// ---- ASSIGN ----
-async function assignBus(){
-  if(!selectedSpotId) return alert("Select a parking first");
-
-  const current=getSpotData(selectedSpotId);
-  if(current && current.status==="NO FIT"){
-    alert("❌ NO FIT. Mark as FIT or CLEAR first.");
-    return;
-  }
-
-  const bus=prompt("Fleet / Bonnet:");
-  if(!bus) return;
-
-  spotsData[selectedSpotId]={fleetNumber:bus.toLowerCase(),status:"FIT"};
-  save();
+function assignBus(){
+  if(!selected) return alert("Select a parking");
+  if(data[selected]?.status==="NO FIT") return alert("NO FIT – mark FIT first");
+  const fleet=prompt("Fleet / bonnet:");
+  if(!fleet) return;
+  save(selected,{fleetNumber:fleet.toLowerCase(),status:"FIT"});
 }
-
-// ---- FIT / CLEAR ----
-function markFit(){
-  if(!selectedSpotId) return alert("Select a parking");
-  const d=spotsData[selectedSpotId]||{};
-  d.status="FIT";
-  spotsData[selectedSpotId]=d;
-  save();
-}
+function markUnfit(){ if(selected) save(selected,{status:"NO FIT"}) }
+function markFit(){ if(selected) save(selected,{status:"FIT"}) }
 function clearSpot(){
-  if(!selectedSpotId) return alert("Select a parking");
-  delete spotsData[selectedSpotId];
-  save();
-}
-
-function save(){
-  localStorage.setItem("np-spots",JSON.stringify(spotsData));
-  draw();
+  if(!selected) return;
+  fetch(`${FIREBASE}/spots/${selected}.json`,{method:"DELETE"}).then(refresh);
 }
 
 document.getElementById("menuBtn").onclick=()=>{
-  document.getElementById("sidebar").classList.toggle("open");
+document.getElementById("sidebar").classList.toggle("open");
 };
 
-refresh();
+map.onload=()=>draw();
+loadLayout().then(refresh);
+setInterval(refresh,6000);
 </script>
 
 </body>
