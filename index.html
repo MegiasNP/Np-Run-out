@@ -75,48 +75,68 @@ cursor:pointer;user-select:none
 </div>
 
 <script>
-const FIREBASE="https://np-run-out-default-rtdb.firebaseio.com";
-const LAYOUT="spots-layout.json";
+/* ================= CONFIG ================= */
+const FIREBASE = "https://np-run-out-default-rtdb.firebaseio.com";
+const LAYOUT_FILE = "spots-layout.json";
+const DATA_FILE = "parking-progress.json";
+/* ========================================== */
 
-let layout=[],data={},selected=null,highlight=null,hlUntil=0;
+let layout = [];
+let data = {};
+let selected = null;
+let highlight = null;
+let highlightUntil = 0;
 
-const map=document.getElementById("map");
-const wrap=document.querySelector(".mapWrap");
+const map = document.getElementById("map");
+const wrap = document.querySelector(".mapWrap");
 
+/* ---------- LOADERS ---------- */
 async function loadLayout(){
-  layout=await fetch(LAYOUT).then(r=>r.json());
+  layout = await fetch(LAYOUT_FILE).then(r=>r.json());
 }
+
 async function refresh(){
-  data=await fetch(FIREBASE+"/spots.json").then(r=>r.json())||{};
+  data = await fetch(DATA_FILE).then(r=>r.json()).catch(()=>({})) || {};
   draw();
 }
+
+/* ---------- DRAW ---------- */
 function draw(){
   document.querySelectorAll(".spot").forEach(e=>e.remove());
-  const sx=map.clientWidth/map.naturalWidth;
-  const sy=map.clientHeight/map.naturalHeight;
-  const now=Date.now();
+
+  const sx = map.clientWidth / map.naturalWidth;
+  const sy = map.clientHeight / map.naturalHeight;
+  const now = Date.now();
 
   layout.forEach(s=>{
-    const d=document.createElement("div");
-    d.className="spot";
-    const st=data[s.id];
-    if(st?.status==="NO FIT") d.classList.add("nofit");
-    else if(st?.status==="FIT") d.classList.add("fit");
-    if(s.id===selected) d.classList.add("selected");
-    if(s.id===highlight && now<hlUntil) d.classList.add("highlight");
+    const d = document.createElement("div");
+    d.className = "spot";
 
-    d.style.left=s.x*sx+"px";
-    d.style.top=s.y*sy+"px";
-    d.style.width=s.w*sx+"px";
-    d.style.height=s.h*sy+"px";
-    d.style.transform=`rotate(${s.rotation||0}deg)`;
-    d.textContent=s.id;
+    const st = data[s.id];
+    if(st?.status === "NO FIT") d.classList.add("nofit");
+    else if(st?.status === "FIT") d.classList.add("fit");
 
-    d.onclick=()=>{selected=s.id;document.getElementById("sel").textContent=s.id;draw()};
+    if(s.id === selected) d.classList.add("selected");
+    if(s.id === highlight && now < highlightUntil) d.classList.add("highlight");
+
+    d.style.left = (s.x * sx) + "px";
+    d.style.top = (s.y * sy) + "px";
+    d.style.width = (s.w * sx) + "px";
+    d.style.height = (s.h * sy) + "px";
+    d.style.transform = `rotate(${s.rotation || 0}deg)`;
+    d.textContent = s.id;
+
+    d.onclick = ()=>{
+      selected = s.id;
+      document.getElementById("sel").textContent = s.id;
+      draw();
+    };
+
     wrap.appendChild(d);
   });
 }
 
+/* ---------- SAVE ---------- */
 async function save(id,payload){
   await fetch(`${FIREBASE}/spots/${id}.json`,{
     method:"PATCH",
@@ -126,39 +146,53 @@ async function save(id,payload){
   refresh();
 }
 
+/* ---------- ACTIONS ---------- */
 function searchBus(){
-  const q=document.getElementById("searchInput").value.toLowerCase();
+  const q = document.getElementById("searchInput").value.toLowerCase();
   for(const id in data){
-    if(data[id].fleetNumber===q){
-      highlight=id;hlUntil=Date.now()+4000;selected=id;
-      document.getElementById("sel").textContent=id;
-      draw();return;
+    if(data[id]?.fleetNumber === q){
+      highlight = id;
+      highlightUntil = Date.now() + 4000;
+      selected = id;
+      document.getElementById("sel").textContent = id;
+      draw();
+      return;
     }
   }
   alert("Bus not found");
 }
 
 function assignBus(){
-  if(!selected) return alert("Select a parking");
-  if(data[selected]?.status==="NO FIT") return alert("NO FIT – mark FIT first");
-  const fleet=prompt("Fleet / bonnet:");
+  if(!selected) return alert("Select a parking first");
+  if(data[selected]?.status === "NO FIT") return alert("NO FIT – mark FIT first");
+
+  const fleet = prompt("Fleet / bonnet:");
   if(!fleet) return;
+
   save(selected,{fleetNumber:fleet.toLowerCase(),status:"FIT"});
 }
-function markUnfit(){ if(selected) save(selected,{status:"NO FIT"}) }
-function markFit(){ if(selected) save(selected,{status:"FIT"}) }
+
+function markUnfit(){
+  if(selected) save(selected,{status:"NO FIT"});
+}
+
+function markFit(){
+  if(selected) save(selected,{status:"FIT"});
+}
+
 function clearSpot(){
   if(!selected) return;
   fetch(`${FIREBASE}/spots/${selected}.json`,{method:"DELETE"}).then(refresh);
 }
 
+/* ---------- UI ---------- */
 document.getElementById("menuBtn").onclick=()=>{
-document.getElementById("sidebar").classList.toggle("open");
+  document.getElementById("sidebar").classList.toggle("open");
 };
 
-map.onload=()=>draw();
+map.onload = ()=>draw();
 loadLayout().then(refresh);
-setInterval(refresh,6000);
+setInterval(refresh,5000);
 </script>
 
 </body>
