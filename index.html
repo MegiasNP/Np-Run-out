@@ -22,16 +22,30 @@ button{font-weight:bold;cursor:pointer}
 
 .mapWrap{position:relative}
 #map{width:100%;display:block}
+
 .spot{
 position:absolute;border:2px solid #00D4FF;
 background:rgba(0,212,255,.25);color:#fff;
 font-size:12px;font-weight:bold;text-align:center;
-cursor:pointer;user-select:none
+cursor:pointer;user-select:none;
+display:flex;align-items:center;justify-content:center;
 }
 .spot.fit{background:rgba(34,197,94,.6)}
 .spot.nofit{background:rgba(239,68,68,.7)}
 .spot.selected{outline:3px solid #fff}
 .spot.highlight{outline:4px solid #000;z-index:20}
+
+.spot .label{
+width:100%;
+display:flex;
+flex-direction:column;
+align-items:center;
+justify-content:center;
+line-height:1.05;
+text-shadow:0 1px 2px rgba(0,0,0,.7);
+}
+.spot .id{font-size:12px;opacity:.9}
+.spot .fleet{font-size:15px;font-weight:800}
 
 @media(max-width:768px){
 .app{grid-template-columns:1fr}
@@ -39,31 +53,6 @@ cursor:pointer;user-select:none
 .sidebar.open{left:0}
 #menuBtn{display:block}
 }
-  /* ====== FORCE VISIBLE BUS NUMBER ====== */
-.spot{
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  justify-content:center;
-  z-index:20;
-  pointer-events:auto;
-}
-
-.spot-id{
-  font-size:11px;
-  opacity:0.85;
-}
-
-.spot-bus{
-  font-size:18px;
-  font-weight:900;
-  color:#000;
-  background:#fff;
-  padding:2px 6px;
-  border-radius:4px;
-  margin-top:2px;
-}
-
 </style>
 </head>
 
@@ -72,42 +61,42 @@ cursor:pointer;user-select:none
 <button id="menuBtn">☰</button>
 
 <div class="app">
-<div class="sidebar" id="sidebar">
-  <h2>NP BUS</h2>
+  <div class="sidebar" id="sidebar">
+    <h2>NP BUS</h2>
 
-  <div class="card">
-    <input id="searchInput" placeholder="Search fleet / bonnet">
-    <button onclick="searchBus()">SEARCH</button>
+    <div class="card">
+      <input id="searchInput" placeholder="Search fleet / bonnet">
+      <button onclick="searchBus()">SEARCH</button>
+    </div>
+
+    <div class="card">
+      <button class="assign" onclick="assignBus()">ASSIGN BUS</button>
+      <button class="unfit" onclick="markUnfit()">MARK NO FIT</button>
+      <button class="fit" onclick="markFit()">MARK FIT</button>
+      <button class="clear" onclick="clearSpot()">CLEAR</button>
+    </div>
+
+    <div class="card">
+      Selected: <b id="sel">—</b>
+    </div>
   </div>
 
-  <div class="card">
-    <button class="assign" onclick="assignBus()">ASSIGN BUS</button>
-    <button class="unfit" onclick="markUnfit()">MARK NO FIT</button>
-    <button class="fit" onclick="markFit()">MARK FIT</button>
-    <button class="clear" onclick="clearSpot()">CLEAR</button>
+  <div class="main">
+    <div class="mapWrap">
+      <img id="map" src="depot-map_1_.jpg" alt="Depot map">
+    </div>
   </div>
-
-  <div class="card">
-    Selected: <b id="sel">—</b>
-  </div>
-</div>
-
-<div class="main">
-  <div class="mapWrap">
-    <img id="map" src="depot-map_1_.jpg">
-  </div>
-</div>
 </div>
 
 <script>
 /* ================= CONFIG ================= */
 const FIREBASE = "https://np-run-out-default-rtdb.firebaseio.com";
-const LAYOUT_FILE = "spots-layout.json";
-const DATA_FILE = "parking-progress.json";
+const LAYOUT_FILE = "spots-layout.json";     // tu archivo de coordenadas (array)
+const FALLBACK_FILE = "parking-progress.json"; // opcional, por si falla Firebase
 /* ========================================== */
 
 let layout = [];
-let data = {};
+let data = {};            // { "31": {fleetNumber:"ws137", status:"NO FIT"}, ... }
 let selected = null;
 let highlight = null;
 let highlightUntil = 0;
@@ -117,90 +106,110 @@ const wrap = document.querySelector(".mapWrap");
 
 /* ---------- LOADERS ---------- */
 async function loadLayout(){
-  layout = await fetch(LAYOUT_FILE).then(r=>r.json());
+  layout = await fetch(LAYOUT_FILE).then(r => r.json());
+}
+
+async function loadFirebaseData(){
+  const r = await fetch(`${FIREBASE}/spots.json`);
+  const j = await r.json();
+  return j || {};
+}
+
+// si tu parking-progress.json tiene estructura {spots:[...]} o { "31": {...} }
+async function loadFallbackData(){
+  const r = await fetch(FALLBACK_FILE);
+  const j = await r.json();
+  if(!j) return {};
+  if(Array.isArray(j.spots)){
+    // convertir array [{id:"31", fleetNumber:"ws137"...}] => objeto por id
+    const out = {};
+    for(const it of j.spots){
+      if(it && it.id != null) out[String(it.id)] = it;
+    }
+    return out;
+  }
+  return j; // si ya viene como objeto por id
 }
 
 async function refresh(){
-  const raw = await fetch(DATA_FILE)
-    .then(r=>r.json())
-    .catch(()=>({}));
-
-  // si el JSON tiene { spots: {...} }, usamos eso
-  data = raw.spots || raw || {};
+  try{
+    data = await loadFirebaseData();
+  }catch(e){
+    // fallback solo si Firebase falla
+    try { data = await loadFallbackData(); }
+    catch(_) { data = {}; }
+  }
   draw();
 }
 
-
 /* ---------- DRAW ---------- */
 function draw(){
-  document.querySelectorAll(".spot").forEach(e=>e.remove());
+  document.querySelectorAll(".spot").forEach(e => e.remove());
+
+  if(!map.naturalWidth || !map.naturalHeight) return;
 
   const sx = map.clientWidth / map.naturalWidth;
   const sy = map.clientHeight / map.naturalHeight;
   const now = Date.now();
 
-  layout.forEach(s=>{
+  layout.forEach(s => {
     const d = document.createElement("div");
     d.className = "spot";
 
-    const st = data[s.id];
+    const id = String(s.id);
+    const st = data?.[id];
+
     if(st?.status === "NO FIT") d.classList.add("nofit");
     else if(st?.status === "FIT") d.classList.add("fit");
 
-    if(s.id === selected) d.classList.add("selected");
-    if(s.id === highlight && now < highlightUntil) d.classList.add("highlight");
+    if(id === selected) d.classList.add("selected");
+    if(id === highlight && now < highlightUntil) d.classList.add("highlight");
 
     d.style.left = (s.x * sx) + "px";
-    d.style.top = (s.y * sy) + "px";
-    d.style.width = (s.w * sx) + "px";
+    d.style.top  = (s.y * sy) + "px";
+    d.style.width  = (s.w * sx) + "px";
     d.style.height = (s.h * sy) + "px";
-    d.style.transform = `rotate(${s.rotation || 0}deg)`;
+
+    const rot = Number(s.rotation || 0);
+    d.style.transform = `rotate(${rot}deg)`;
+    d.style.transformOrigin = "center center";
+
+    // IMPORTANTE: contra-rotar el texto para que se lea recto
+    const fleet = st?.fleetNumber ? String(st.fleetNumber).toUpperCase() : "";
     d.innerHTML = `
-  <div class="spot-id">${s.id}</div>
-  ${st?.fleetNumber ? `<div class="spot-bus">${st.fleetNumber.toUpperCase()}</div>` : ""}
-`;
+      <div class="label" style="transform: rotate(${-rot}deg);">
+        <div class="id">${id}</div>
+        ${fleet ? `<div class="fleet">${fleet}</div>` : ``}
+      </div>
+    `;
 
-
-
-    d.onclick = ()=>{
-  selected = s.id;
-  document.getElementById("sel").textContent = s.id;
-
-  // si no hay bus asignado, pedir bonnet al hacer click
-  if(!data[s.id]?.fleetNumber){
-    const fleet = prompt(`Assign bonnet number to parking ${s.id}:`);
-    if(fleet){
-      save(s.id,{
-        fleetNumber: fleet.trim().toLowerCase(),
-        status: data[s.id]?.status || "FIT"
-      });
-      return;
-    }
-  }
-
-  draw();
-};
-
+    d.onclick = () => {
+      selected = id;
+      document.getElementById("sel").textContent = id;
+      draw();
+    };
 
     wrap.appendChild(d);
   });
 }
 
 /* ---------- SAVE ---------- */
-async function save(id,payload){
-  await fetch(`${FIREBASE}/spots/${id}.json`,{
+async function save(id, payload){
+  await fetch(`${FIREBASE}/spots/${id}.json`, {
     method:"PATCH",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify(payload)
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify(payload)
   });
-  refresh();
+  await refresh();
 }
 
 /* ---------- ACTIONS ---------- */
 function searchBus(){
-  const q = document.getElementById("searchInput").value.toLowerCase();
+  const q = document.getElementById("searchInput").value.trim().toLowerCase();
+  if(!q) return;
+
   for(const id in data){
-    if(data[id]?.fleetNumber === q){
+    if(String(data[id]?.fleetNumber || "").toLowerCase() === q){
       highlight = id;
       highlightUntil = Date.now() + 4000;
       selected = id;
@@ -216,33 +225,39 @@ function assignBus(){
   if(!selected) return alert("Select a parking first");
   if(data[selected]?.status === "NO FIT") return alert("NO FIT – mark FIT first");
 
-  const fleet = prompt("Fleet / bonnet:");
+  const fleet = prompt(`Fleet / bonnet for spot ${selected}:`);
   if(!fleet) return;
 
-  save(selected,{fleetNumber:fleet.toLowerCase(),status:"FIT"});
+  save(selected, {
+    fleetNumber: fleet.trim().toLowerCase(),
+    status: data[selected]?.status || "FIT"
+  });
 }
 
 function markUnfit(){
-  if(selected) save(selected,{status:"NO FIT"});
+  if(!selected) return alert("Select a parking first");
+  save(selected, { status:"NO FIT" });
 }
 
 function markFit(){
-  if(selected) save(selected,{status:"FIT"});
+  if(!selected) return alert("Select a parking first");
+  save(selected, { status:"FIT" });
 }
 
 function clearSpot(){
-  if(!selected) return;
-  fetch(`${FIREBASE}/spots/${selected}.json`,{method:"DELETE"}).then(refresh);
+  if(!selected) return alert("Select a parking first");
+  fetch(`${FIREBASE}/spots/${selected}.json`, { method:"DELETE" })
+    .then(refresh);
 }
 
 /* ---------- UI ---------- */
-document.getElementById("menuBtn").onclick=()=>{
+document.getElementById("menuBtn").onclick = () => {
   document.getElementById("sidebar").classList.toggle("open");
 };
 
-map.onload = ()=>draw();
+map.onload = () => draw();
 loadLayout().then(refresh);
-setInterval(refresh,5000);
+setInterval(refresh, 5000);
 </script>
 
 </body>
