@@ -34,37 +34,35 @@ button{font-weight:bold;cursor:pointer}
   align-items:center;
   justify-content:center;
 
-  overflow:hidden;      /* ⬅️ CLAVE: evita overlap */
+  overflow:hidden;        /* CLAVE anti-overlap */
   text-align:center;
 }
 
-.spot.fit{background:rgba(34,197,94,.6)}
-.spot.nofit{background:rgba(239,68,68,.7)}
-.spot.selected{outline:3px solid #fff}
-.spot.highlight{outline:4px solid #000;z-index:20}
-
+/* contenedor interno */
 .spot .label{
   width:100%;
   height:100%;
   display:flex;
   align-items:center;
   justify-content:center;
-  flex-direction:column;
 }
 
+/* bonnet number */
 .spot .fleet{
-  font-size:12px;          /* tamaño seguro */
+  font-size:11px;          /* 🔽 reducido */
   font-weight:700;
-  max-width:100%;
   white-space:nowrap;
+  max-width:100%;
   overflow:hidden;
-  text-overflow:ellipsis;  /* por si algún código es largo */
+  text-overflow:ellipsis;
 }
 
+/* id del parking (solo cuando está vacío) */
 .spot .id{
-  font-size:10px;
-  opacity:0.7;
+  font-size:9px;
+  opacity:0.6;
 }
+
 
 
 @media(max-width:768px){
