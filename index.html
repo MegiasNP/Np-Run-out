@@ -209,19 +209,17 @@ let fontSize = Math.min(pw, ph) * 0.45;
 // límites de seguridad
 fontSize = Math.max(8, Math.min(fontSize, 18));
 
+const hasBus = !!st?.fleetNumber;
+
 d.innerHTML = `
-  <div class="label"
-       style="
-         transform:${isVertical ? "rotate(-90deg)" : "none"};
-         font-size:${fontSize}px;
-       ">
-    ${
-      st?.fleetNumber
-        ? `<div class="fleet">${st.fleetNumber.toUpperCase()}</div>`
-        : `<div class="id">${s.id}</div>`
+  <div class="spot-content">
+    ${hasBus 
+      ? `<div class="fleet">${st.fleetNumber.toUpperCase()}</div>`
+      : `<div class="spot-id">${s.id}</div>`
     }
   </div>
 `;
+
 
 
 
