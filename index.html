@@ -167,6 +167,7 @@ function draw(){
   function draw(){
   if(!map.naturalWidth || !map.naturalHeight) return;
 
+  document.querySelectorAll(".spot").forEach(e => e.remove());
 
   const sx = map.clientWidth / map.naturalWidth;
   const sy = map.clientHeight / map.naturalHeight;
@@ -185,47 +186,32 @@ function draw(){
     if(id === selected) d.classList.add("selected");
     if(id === highlight && now < highlightUntil) d.classList.add("highlight");
 
-    d.style.left = (s.x * sx) + "px";
-    d.style.top  = (s.y * sy) + "px";
-    d.style.width  = (s.w * sx) + "px";
-    d.style.height = (s.h * sy) + "px";
+    const pw = s.w * sx;
+    const ph = s.h * sy;
+
+    d.style.left   = (s.x * sx) + "px";
+    d.style.top    = (s.y * sy) + "px";
+    d.style.width  = pw + "px";
+    d.style.height = ph + "px";
 
     const rot = Number(s.rotation || 0);
-d.style.transform = `rotate(${rot}deg)`;
-d.style.transformOrigin = "center center";
+    d.style.transform = `rotate(${rot}deg)`;
+    d.style.transformOrigin = "center center";
 
-// detectar orientación del parking
-const isVertical = (s.h > s.w);
+    // 🔠 tamaño automático del texto
+    let fontSize = Math.min(pw, ph) * 0.45;
+    fontSize = Math.max(8, Math.min(fontSize, 18));
 
-const fleet = st?.fleetNumber ? String(st.fleetNumber).toUpperCase() : "";
+    const hasBus = !!st?.fleetNumber;
 
-const isVertical = (s.h > s.w);
-
-// tamaño real del parking en pantalla
-const pw = s.w * sx;
-const ph = s.h * sy;
-
-// cálculo automático del font-size
-let fontSize = Math.min(pw, ph) * 0.45;
-
-// límites de seguridad
-fontSize = Math.max(8, Math.min(fontSize, 18));
-
-const hasBus = !!st?.fleetNumber;
-
-d.innerHTML = `
-  <div class="spot-content">
-    ${hasBus 
-      ? `<div class="fleet">${st.fleetNumber.toUpperCase()}</div>`
-      : `<div class="spot-id">${s.id}</div>`
-    }
-  </div>
-`;
-
-
-
-
-
+    d.innerHTML = `
+      <div class="label" style="font-size:${fontSize}px">
+        ${hasBus
+          ? `<div class="fleet">${st.fleetNumber.toUpperCase()}</div>`
+          : `<div class="id">${id}</div>`
+        }
+      </div>
+    `;
 
     d.onclick = () => {
       selected = id;
@@ -236,6 +222,7 @@ d.innerHTML = `
     wrap.appendChild(d);
   });
 }
+
 
 /* ---------- SAVE ---------- */
 async function save(id, payload){
