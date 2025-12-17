@@ -286,11 +286,19 @@ document.getElementById("menuBtn").onclick = () => {
   document.getElementById("sidebar").classList.toggle("open");
 };
 
-map.onload = async () => {
+async function boot(){
   await loadLayout();
   await refresh();
+  draw();
   setInterval(refresh, 5000);
-};
+}
+
+if(map.complete){
+  boot();
+} else {
+  map.onload = boot;
+}
+
 
 </script>
 
