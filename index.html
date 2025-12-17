@@ -200,14 +200,15 @@ const isVertical = (s.h > s.w);
 const fleet = st?.fleetNumber ? String(st.fleetNumber).toUpperCase() : "";
 
 d.innerHTML = `
-  <div class="label"
-       style="
-         transform: rotate(${isVertical ? -90 : -rot}deg);
-       ">
-    <div class="id">${id}</div>
-    ${fleet ? `<div class="fleet">${fleet}</div>` : ``}
+  <div class="label">
+    ${
+      st?.fleetNumber
+        ? `<div class="fleet">${st.fleetNumber.toUpperCase()}</div>`
+        : `<div class="id">${s.id}</div>`
+    }
   </div>
 `;
+
 
 
     d.onclick = () => {
