@@ -297,9 +297,12 @@ document.getElementById("menuBtn").onclick = () => {
   document.getElementById("sidebar").classList.toggle("open");
 };
 
-map.onload = () => draw();
-loadLayout().then(refresh);
-setInterval(refresh, 5000);
+map.onload = async () => {
+  await loadLayout();
+  await refresh();
+  setInterval(refresh, 5000);
+};
+
 </script>
 
 </body>
