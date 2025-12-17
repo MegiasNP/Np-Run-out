@@ -199,8 +199,22 @@ const fleet = st?.fleetNumber ? String(st.fleetNumber).toUpperCase() : "";
 
 const isVertical = (s.h > s.w);
 
+// tamaño real del parking en pantalla
+const pw = s.w * sx;
+const ph = s.h * sy;
+
+// cálculo automático del font-size
+let fontSize = Math.min(pw, ph) * 0.45;
+
+// límites de seguridad
+fontSize = Math.max(8, Math.min(fontSize, 18));
+
 d.innerHTML = `
-  <div class="label" style="transform:${isVertical ? "rotate(-90deg)" : "none"}">
+  <div class="label"
+       style="
+         transform:${isVertical ? "rotate(-90deg)" : "none"};
+         font-size:${fontSize}px;
+       ">
     ${
       st?.fleetNumber
         ? `<div class="fleet">${st.fleetNumber.toUpperCase()}</div>`
@@ -208,6 +222,7 @@ d.innerHTML = `
     }
   </div>
 `;
+
 
 
 
