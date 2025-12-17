@@ -199,11 +199,7 @@ const fleet = st?.fleetNumber ? String(st.fleetNumber).toUpperCase() : "";
 
 d.innerHTML = `
   <div class="label">
-    ${
-      st?.fleetNumber
-        ? `<div class="fleet">${st.fleetNumber.toUpperCase()}</div>`
-        : `<div class="id">${s.id}</div>`
-    }
+    ${st?.fleetNumber ? `<div class="fleet">${st.fleetNumber.toUpperCase()}</div>` : `<div class="id">${s.id}</div>`}
   </div>
 `;
 
