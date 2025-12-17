@@ -164,7 +164,9 @@ async function refresh(){
 function draw(){
   document.querySelectorAll(".spot").forEach(e => e.remove());
 
+  function draw(){
   if(!map.naturalWidth || !map.naturalHeight) return;
+
 
   const sx = map.clientWidth / map.naturalWidth;
   const sy = map.clientHeight / map.naturalHeight;
