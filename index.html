@@ -96,9 +96,15 @@ async function loadLayout(){
 }
 
 async function refresh(){
-  data = await fetch(DATA_FILE).then(r=>r.json()).catch(()=>({})) || {};
+  const raw = await fetch(DATA_FILE)
+    .then(r=>r.json())
+    .catch(()=>({}));
+
+  // si el JSON tiene { spots: {...} }, usamos eso
+  data = raw.spots || raw || {};
   draw();
 }
+
 
 /* ---------- DRAW ---------- */
 function draw(){
