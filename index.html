@@ -197,11 +197,18 @@ const isVertical = (s.h > s.w);
 
 const fleet = st?.fleetNumber ? String(st.fleetNumber).toUpperCase() : "";
 
+const isVertical = (s.h > s.w);
+
 d.innerHTML = `
-  <div class="label">
-    ${st?.fleetNumber ? `<div class="fleet">${st.fleetNumber.toUpperCase()}</div>` : `<div class="id">${s.id}</div>`}
+  <div class="label" style="transform:${isVertical ? "rotate(-90deg)" : "none"}">
+    ${
+      st?.fleetNumber
+        ? `<div class="fleet">${st.fleetNumber.toUpperCase()}</div>`
+        : `<div class="id">${s.id}</div>`
+    }
   </div>
 `;
+
 
 
 
