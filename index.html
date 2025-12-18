@@ -111,8 +111,61 @@ async function refresh(){
 
 /* DRAW */
 function draw(){
-  if(!map.naturalWidth) return;
-  document.querySelectorAll(".spot").forEach(e=>e.remove());
+  if(!map.naturalWidth || !map.naturalHeight) return;
+
+  document.querySelectorAll(".spot").forEach(e => e.remove());
+
+  const sx = map.clientWidth / map.naturalWidth;
+  const sy = map.clientHeight / map.naturalHeight;
+  const now = Date.now();
+
+  layout.forEach(s => {
+    const d = document.createElement("div");
+    d.className = "spot";
+
+    const id = String(s.id);
+    const st = data[id];
+
+    if(st?.status === "NO FIT") d.classList.add("nofit");
+    else if(st?.status === "FIT") d.classList.add("fit");
+
+    if(id === selected) d.classList.add("selected");
+    if(id === highlight && now < highlightUntil) d.classList.add("highlight");
+
+    const pw = s.w * sx;
+    const ph = s.h * sy;
+
+    d.style.left = (s.x * sx) + "px";
+    d.style.top = (s.y * sy) + "px";
+    d.style.width = pw + "px";
+    d.style.height = ph + "px";
+    d.style.transform = `rotate(${s.rotation || 0}deg)`;
+    d.style.transformOrigin = "center center";
+
+    // 🔠 tamaño automático
+    let fontSize = Math.min(pw, ph) * 0.45;
+    fontSize = Math.max(8, Math.min(fontSize, 18));
+
+    const hasBus = !!st?.fleetNumber;
+
+    d.innerHTML = `
+      <div class="label" style="font-size:${fontSize}px">
+        ${hasBus
+          ? `<div class="fleet">${st.fleetNumber.toUpperCase()}</div>`
+          : `<div class="id">${id}</div>`
+        }
+      </div>
+    `;
+
+    d.onclick = () => {
+      selected = id;
+      document.getElementById("sel").textContent = id;
+      draw();
+    };
+
+    wrap.appendChild(d);
+  });
+}
 
   const sx = map.clientWidth / map.naturalWidth;
   const sy = map.clientHeight / map.naturalHeight;
