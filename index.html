@@ -155,10 +155,16 @@ function draw(){
     fontSize = Math.max(8, Math.min(fontSize, 18));
 
     d.innerHTML = `
-      <div class="label" style="font-size:${fontSize}px">
-        ${st?.fleetNumber ? st.fleetNumber.toUpperCase() : id}
-      </div>
-    `;
+  <div class="label" 
+       style="
+         font-size:${fontSize}px;
+         writing-mode: vertical-rl;
+         transform: rotate(180deg);
+       ">
+    ${st?.fleetNumber ? st.fleetNumber.toUpperCase() : id}
+  </div>
+`;
+
 
     d.onclick = () => {
       selected = id;
