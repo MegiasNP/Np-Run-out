@@ -28,42 +28,27 @@ button{font-weight:bold;cursor:pointer}
   border:2px solid #00D4FF;
   background:rgba(0,212,255,.25);
   cursor:pointer;
-  user-select:none;
-
   display:flex;
   align-items:center;
   justify-content:center;
-
-  overflow:hidden;        /* CLAVE anti-overlap */
-  text-align:center;
+  overflow:hidden;
 }
 
-/* contenedor interno */
-.spot .label{
+.spot.fit{background:rgba(34,197,94,.6)}
+.spot.nofit{background:rgba(239,68,68,.7)}
+.spot.selected{outline:3px solid #fff}
+.spot.highlight{outline:4px solid #000;z-index:20}
+
+.label{
   width:100%;
   height:100%;
   display:flex;
   align-items:center;
   justify-content:center;
-}
-
-/* bonnet number */
-.spot .fleet{
-  font-size:11px;          /* 🔽 reducido */
-  font-weight:700;
+  text-align:center;
+  font-weight:bold;
   white-space:nowrap;
-  max-width:100%;
-  overflow:hidden;
-  text-overflow:ellipsis;
 }
-
-/* id del parking (solo cuando está vacío) */
-.spot .id{
-  font-size:9px;
-  opacity:0.6;
-}
-
-
 
 @media(max-width:768px){
 .app{grid-template-columns:1fr}
@@ -101,121 +86,67 @@ button{font-weight:bold;cursor:pointer}
 
   <div class="main">
     <div class="mapWrap">
-      <img id="map" src="depot-map_1_.jpg" alt="Depot map">
+      <img id="map" src="depot-map_1_.jpg">
     </div>
   </div>
 </div>
 
 <script>
-/* ================= CONFIG ================= */
-const FIREBASE = "https://np-run-out-default-rtdb.firebaseio.com";
-const LAYOUT_FILE = "spots-layout.json";     // tu archivo de coordenadas (array)
-const FALLBACK_FILE = "parking-progress.json"; // opcional, por si falla Firebase
-/* ========================================== */
+const FIREBASE="https://np-run-out-default-rtdb.firebaseio.com";
+const LAYOUT_FILE="spots-layout.json";
 
-let layout = [];
-let data = {};            // { "31": {fleetNumber:"ws137", status:"NO FIT"}, ... }
-let selected = null;
-let highlight = null;
-let highlightUntil = 0;
+let layout=[], data={}, selected=null, highlight=null, hlUntil=0;
 
-const map = document.getElementById("map");
-const wrap = document.querySelector(".mapWrap");
+const map=document.getElementById("map");
+const wrap=document.querySelector(".mapWrap");
 
-/* ---------- LOADERS ---------- */
+/* LOADERS */
 async function loadLayout(){
-  layout = await fetch(LAYOUT_FILE).then(r => r.json());
+  layout = await fetch(LAYOUT_FILE).then(r=>r.json());
 }
-
-async function loadFirebaseData(){
-  const r = await fetch(`${FIREBASE}/spots.json`);
-  const j = await r.json();
-  return j || {};
-}
-
-// si tu parking-progress.json tiene estructura {spots:[...]} o { "31": {...} }
-async function loadFallbackData(){
-  const r = await fetch(FALLBACK_FILE);
-  const j = await r.json();
-  if(!j) return {};
-  if(Array.isArray(j.spots)){
-    // convertir array [{id:"31", fleetNumber:"ws137"...}] => objeto por id
-    const out = {};
-    for(const it of j.spots){
-      if(it && it.id != null) out[String(it.id)] = it;
-    }
-    return out;
-  }
-  return j; // si ya viene como objeto por id
-}
-
 async function refresh(){
-  try{
-    data = await loadFirebaseData();
-  }catch(e){
-    // fallback solo si Firebase falla
-    try { data = await loadFallbackData(); }
-    catch(_) { data = {}; }
-  }
+  data = await fetch(FIREBASE+"/spots.json").then(r=>r.json()) || {};
   draw();
 }
 
-/* ---------- DRAW ---------- */
+/* DRAW */
 function draw(){
-  document.querySelectorAll(".spot").forEach(e => e.remove());
-
-  function draw(){
-  if(!map.naturalWidth || !map.naturalHeight) return;
-
-  document.querySelectorAll(".spot").forEach(e => e.remove());
+  if(!map.naturalWidth) return;
+  document.querySelectorAll(".spot").forEach(e=>e.remove());
 
   const sx = map.clientWidth / map.naturalWidth;
   const sy = map.clientHeight / map.naturalHeight;
   const now = Date.now();
 
-  layout.forEach(s => {
-    const d = document.createElement("div");
-    d.className = "spot";
+  layout.forEach(s=>{
+    const id=String(s.id);
+    const st=data[id];
+    const d=document.createElement("div");
+    d.className="spot";
 
-    const id = String(s.id);
-    const st = data?.[id];
+    if(st?.status==="NO FIT") d.classList.add("nofit");
+    else if(st?.status==="FIT") d.classList.add("fit");
+    if(id===selected) d.classList.add("selected");
+    if(id===highlight && now<hlUntil) d.classList.add("highlight");
 
-    if(st?.status === "NO FIT") d.classList.add("nofit");
-    else if(st?.status === "FIT") d.classList.add("fit");
+    const pw=s.w*sx, ph=s.h*sy;
+    d.style.left=s.x*sx+"px";
+    d.style.top=s.y*sy+"px";
+    d.style.width=pw+"px";
+    d.style.height=ph+"px";
+    d.style.transform=`rotate(${s.rotation||0}deg)`;
 
-    if(id === selected) d.classList.add("selected");
-    if(id === highlight && now < highlightUntil) d.classList.add("highlight");
+    let fontSize=Math.max(8, Math.min(Math.min(pw,ph)*0.45,18));
 
-    const pw = s.w * sx;
-    const ph = s.h * sy;
-
-    d.style.left   = (s.x * sx) + "px";
-    d.style.top    = (s.y * sy) + "px";
-    d.style.width  = pw + "px";
-    d.style.height = ph + "px";
-
-    const rot = Number(s.rotation || 0);
-    d.style.transform = `rotate(${rot}deg)`;
-    d.style.transformOrigin = "center center";
-
-    // 🔠 tamaño automático del texto
-    let fontSize = Math.min(pw, ph) * 0.45;
-    fontSize = Math.max(8, Math.min(fontSize, 18));
-
-    const hasBus = !!st?.fleetNumber;
-
-    d.innerHTML = `
+    d.innerHTML=`
       <div class="label" style="font-size:${fontSize}px">
-        ${hasBus
-          ? `<div class="fleet">${st.fleetNumber.toUpperCase()}</div>`
-          : `<div class="id">${id}</div>`
-        }
+        ${st?.fleetNumber ? st.fleetNumber.toUpperCase() : id}
       </div>
     `;
 
-    d.onclick = () => {
-      selected = id;
-      document.getElementById("sel").textContent = id;
+    d.onclick=()=>{
+      selected=id;
+      document.getElementById("sel").textContent=id;
       draw();
     };
 
@@ -223,95 +154,38 @@ function draw(){
   });
 }
 
-
-/* ---------- SAVE ---------- */
-async function save(id, payload){
-  await fetch(`${FIREBASE}/spots/${id}.json`, {
-    method:"PATCH",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify(payload)
-  });
-  await refresh();
-}
-
-/* ---------- ACTIONS ---------- */
+/* ACTIONS */
 function searchBus(){
-  const q = document.getElementById("searchInput").value.trim().toLowerCase();
-  if(!q) return;
-
+  const q=document.getElementById("searchInput").value.toLowerCase();
   for(const id in data){
-    if(String(data[id]?.fleetNumber || "").toLowerCase() === q){
-      highlight = id;
-      highlightUntil = Date.now() + 4000;
-      selected = id;
-      document.getElementById("sel").textContent = id;
-      draw();
-      return;
+    if(data[id]?.fleetNumber===q){
+      highlight=id; hlUntil=Date.now()+4000; selected=id;
+      document.getElementById("sel").textContent=id;
+      draw(); return;
     }
   }
   alert("Bus not found");
 }
-
 function assignBus(){
-  if(!selected) return alert("Select a parking first");
-  if(data[selected]?.status === "NO FIT") return alert("NO FIT – mark FIT first");
-
-  const fleet = prompt(`Fleet / bonnet for spot ${selected}:`);
-  if(!fleet) return;
-
-  save(selected, {
-    fleetNumber: fleet.trim().toLowerCase(),
-    status: data[selected]?.status || "FIT"
-  });
+  if(!selected) return alert("Select a parking");
+  if(data[selected]?.status==="NO FIT") return alert("NO FIT – mark FIT first");
+  const f=prompt("Bonnet number:");
+  if(f) save(selected,{fleetNumber:f.toLowerCase(),status:"FIT"});
 }
+function markUnfit(){ if(selected) save(selected,{status:"NO FIT"}); }
+function markFit(){ if(selected) save(selected,{status:"FIT"}); }
+function clearSpot(){ if(selected) fetch(`${FIREBASE}/spots/${selected}.json`,{method:"DELETE"}).then(refresh); }
 
-function markUnfit(){
-  if(!selected) return alert("Select a parking first");
-  save(selected, { status:"NO FIT" });
-}
+async function save(id,p){ await fetch(`${FIREBASE}/spots/${id}.json`,{method:"PATCH",headers:{'Content-Type':'application/json'},body:JSON.stringify(p)}); refresh(); }
 
-function markFit(){
-  if(!selected) return alert("Select a parking first");
-  save(selected, { status:"FIT" });
-}
-
-function clearSpot(){
-  if(!selected) return alert("Select a parking first");
-  fetch(`${FIREBASE}/spots/${selected}.json`, { method:"DELETE" })
-    .then(refresh);
-}
-
-/* ---------- UI ---------- */
-document.getElementById("menuBtn").onclick = () => {
-  document.getElementById("sidebar").classList.toggle("open");
-};
+/* UI */
+document.getElementById("menuBtn").onclick=()=>sidebar.classList.toggle("open");
 
 async function boot(){
   await loadLayout();
   await refresh();
-  draw();
-  setInterval(refresh, 5000);
 }
-
-if(map.complete){
-  boot();
-} else {
-  map.onload = boot;
-}
-async function boot(){
-  await loadLayout();
-  await refresh();
-  draw();
-  setInterval(refresh, 5000);
-}
-
-if(map.complete){
-  boot();
-} else {
-  map.onload = boot;
-}
-
-
+map.complete ? boot() : map.onload=boot;
 </script>
 
 </body>
