@@ -9,9 +9,11 @@
 body{margin:0;font-family:Arial;background:#0A1628;color:#fff}
 #menuBtn{display:none;position:fixed;top:10px;left:10px;z-index:1000;
 background:#00D4FF;color:#022;border:none;border-radius:8px;padding:10px;font-size:20px}
+
 .app{display:grid;grid-template-columns:320px 1fr;height:100vh}
 .sidebar{background:#13233a;padding:14px;overflow:auto}
 .main{position:relative}
+
 .card{background:#0f1d31;padding:12px;border-radius:10px;margin-bottom:12px}
 input,button{width:100%;padding:10px;margin-top:8px;border-radius:8px;border:none}
 button{font-weight:bold;cursor:pointer}
@@ -51,10 +53,10 @@ button{font-weight:bold;cursor:pointer}
 }
 
 @media(max-width:768px){
-.app{grid-template-columns:1fr}
-.sidebar{position:fixed;left:-320px;top:0;bottom:0;width:320px;z-index:999}
-.sidebar.open{left:0}
-#menuBtn{display:block}
+  .app{grid-template-columns:1fr}
+  .sidebar{position:fixed;left:-320px;top:0;bottom:0;width:320px;z-index:999}
+  .sidebar.open{left:0}
+  #menuBtn{display:block}
 }
 </style>
 </head>
@@ -86,32 +88,39 @@ button{font-weight:bold;cursor:pointer}
 
   <div class="main">
     <div class="mapWrap">
-      <img id="map" src="depot-map_1_.jpg">
+      <img id="map" src="depot-map_1_.jpg" alt="Depot map">
     </div>
   </div>
 </div>
 
 <script>
-const FIREBASE="https://np-run-out-default-rtdb.firebaseio.com";
-const LAYOUT_FILE="spots-layout.json";
+/* ===== CONFIG ===== */
+const FIREBASE = "https://np-run-out-default-rtdb.firebaseio.com";
+const LAYOUT_FILE = "spots-layout.json";
 
-let layout=[], data={}, selected=null, highlight=null, hlUntil=0;
+/* ===== STATE ===== */
+let layout = [];
+let data = {};
+let selected = null;
+let highlight = null;
+let highlightUntil = 0;
 
-const map=document.getElementById("map");
-const wrap=document.querySelector(".mapWrap");
+const map = document.getElementById("map");
+const wrap = document.querySelector(".mapWrap");
 
-/* LOADERS */
+/* ===== LOAD ===== */
 async function loadLayout(){
-  layout = await fetch(LAYOUT_FILE).then(r=>r.json());
+  layout = await fetch(LAYOUT_FILE).then(r => r.json());
 }
+
 async function refresh(){
-  data = await fetch(FIREBASE+"/spots.json").then(r=>r.json()) || {};
+  data = await fetch(FIREBASE + "/spots.json").then(r => r.json()) || {};
   draw();
 }
 
-/* DRAW */
+/* ===== DRAW ===== */
 function draw(){
-  if(!map.naturalWidth || !map.naturalHeight) return;
+  if(!map.naturalWidth) return;
 
   document.querySelectorAll(".spot").forEach(e => e.remove());
 
@@ -120,11 +129,11 @@ function draw(){
   const now = Date.now();
 
   layout.forEach(s => {
-    const d = document.createElement("div");
-    d.className = "spot";
-
     const id = String(s.id);
     const st = data[id];
+
+    const d = document.createElement("div");
+    d.className = "spot";
 
     if(st?.status === "NO FIT") d.classList.add("nofit");
     else if(st?.status === "FIT") d.classList.add("fit");
@@ -136,24 +145,18 @@ function draw(){
     const ph = s.h * sy;
 
     d.style.left = (s.x * sx) + "px";
-    d.style.top = (s.y * sy) + "px";
-    d.style.width = pw + "px";
+    d.style.top  = (s.y * sy) + "px";
+    d.style.width  = pw + "px";
     d.style.height = ph + "px";
     d.style.transform = `rotate(${s.rotation || 0}deg)`;
     d.style.transformOrigin = "center center";
 
-    // 🔠 tamaño automático
     let fontSize = Math.min(pw, ph) * 0.45;
     fontSize = Math.max(8, Math.min(fontSize, 18));
 
-    const hasBus = !!st?.fleetNumber;
-
     d.innerHTML = `
       <div class="label" style="font-size:${fontSize}px">
-        ${hasBus
-          ? `<div class="fleet">${st.fleetNumber.toUpperCase()}</div>`
-          : `<div class="id">${id}</div>`
-        }
+        ${st?.fleetNumber ? st.fleetNumber.toUpperCase() : id}
       </div>
     `;
 
@@ -167,78 +170,58 @@ function draw(){
   });
 }
 
-  const sx = map.clientWidth / map.naturalWidth;
-  const sy = map.clientHeight / map.naturalHeight;
-  const now = Date.now();
-
-  layout.forEach(s=>{
-    const id=String(s.id);
-    const st=data[id];
-    const d=document.createElement("div");
-    d.className="spot";
-
-    if(st?.status==="NO FIT") d.classList.add("nofit");
-    else if(st?.status==="FIT") d.classList.add("fit");
-    if(id===selected) d.classList.add("selected");
-    if(id===highlight && now<hlUntil) d.classList.add("highlight");
-
-    const pw=s.w*sx, ph=s.h*sy;
-    d.style.left=s.x*sx+"px";
-    d.style.top=s.y*sy+"px";
-    d.style.width=pw+"px";
-    d.style.height=ph+"px";
-    d.style.transform=`rotate(${s.rotation||0}deg)`;
-
-    let fontSize=Math.max(8, Math.min(Math.min(pw,ph)*0.45,18));
-
-    d.innerHTML=`
-      <div class="label" style="font-size:${fontSize}px">
-        ${st?.fleetNumber ? st.fleetNumber.toUpperCase() : id}
-      </div>
-    `;
-
-    d.onclick=()=>{
-      selected=id;
-      document.getElementById("sel").textContent=id;
-      draw();
-    };
-
-    wrap.appendChild(d);
+/* ===== SAVE ===== */
+async function save(id, payload){
+  await fetch(FIREBASE + "/spots/" + id + ".json", {
+    method:"PATCH",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify(payload)
   });
+  refresh();
 }
 
-/* ACTIONS */
+/* ===== ACTIONS ===== */
 function searchBus(){
-  const q=document.getElementById("searchInput").value.toLowerCase();
+  const q = document.getElementById("searchInput").value.toLowerCase();
   for(const id in data){
-    if(data[id]?.fleetNumber===q){
-      highlight=id; hlUntil=Date.now()+4000; selected=id;
-      document.getElementById("sel").textContent=id;
-      draw(); return;
+    if(data[id]?.fleetNumber === q){
+      highlight = id;
+      highlightUntil = Date.now() + 4000;
+      selected = id;
+      document.getElementById("sel").textContent = id;
+      draw();
+      return;
     }
   }
   alert("Bus not found");
 }
+
 function assignBus(){
   if(!selected) return alert("Select a parking");
-  if(data[selected]?.status==="NO FIT") return alert("NO FIT – mark FIT first");
-  const f=prompt("Bonnet number:");
-  if(f) save(selected,{fleetNumber:f.toLowerCase(),status:"FIT"});
+  if(data[selected]?.status === "NO FIT") return alert("NO FIT – mark FIT first");
+
+  const f = prompt("Bonnet number:");
+  if(f) save(selected, { fleetNumber:f.toLowerCase(), status:"FIT" });
 }
+
 function markUnfit(){ if(selected) save(selected,{status:"NO FIT"}); }
 function markFit(){ if(selected) save(selected,{status:"FIT"}); }
-function clearSpot(){ if(selected) fetch(`${FIREBASE}/spots/${selected}.json`,{method:"DELETE"}).then(refresh); }
+function clearSpot(){
+  if(selected) fetch(FIREBASE + "/spots/" + selected + ".json",{method:"DELETE"}).then(refresh);
+}
 
-async function save(id,p){ await fetch(`${FIREBASE}/spots/${id}.json`,{method:"PATCH",headers:{'Content-Type':'application/json'},body:JSON.stringify(p)}); refresh(); }
+/* ===== UI ===== */
+document.getElementById("menuBtn").onclick =
+  () => document.getElementById("sidebar").classList.toggle("open");
 
-/* UI */
-document.getElementById("menuBtn").onclick=()=>sidebar.classList.toggle("open");
-
+/* ===== BOOT ===== */
 async function boot(){
   await loadLayout();
   await refresh();
+  setInterval(refresh, 5000);
 }
-map.complete ? boot() : map.onload=boot;
+
+map.complete ? boot() : map.onload = boot;
 </script>
 
 </body>
