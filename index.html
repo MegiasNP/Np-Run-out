@@ -156,11 +156,11 @@ function draw(){
 
     d.innerHTML = `
   <div class="label" 
-       style="
-         font-size:${fontSize}px;
-         writing-mode: vertical-rl;
-         transform: rotate(180deg);
-       ">
+     style="
+       font-size:${fontSize}px;
+       writing-mode: vertical-lr;
+     ">
+
     ${st?.fleetNumber ? st.fleetNumber.toUpperCase() : id}
   </div>
 `;
